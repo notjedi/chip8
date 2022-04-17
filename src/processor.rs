@@ -3,8 +3,28 @@ use std::usize;
 use rand::Rng;
 
 const CHIP8_RAM: usize = 4096;
-const CHIP8_SCREEN_SIZE: usize = 32 * 64; // TODO: check this
 const OPCODE_SIZE: usize = 2;
+const CHIP8_SCREEN_WIDTH: usize = 64;
+const CHIP8_SCREEN_HEIGHT: usize = 32;
+
+static FONTSET: [u8; 80]= [0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    ];
+
 
 enum ProgramCounter {
     Next,
@@ -34,7 +54,7 @@ pub struct Processor {
     reg: [u8; 16],
     stack: [usize; 16],
     ram: [u8; CHIP8_RAM],
-    vram: [u8; CHIP8_SCREEN_SIZE],
+    vram: [[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT],
     pc: usize,
     sp: usize,
     i: usize,
@@ -44,12 +64,16 @@ pub struct Processor {
 
 impl Processor {
     pub fn new() -> Self {
-        // TODO: add font to the first 80 bytes
+        let mut ram = [0u8; CHIP8_RAM];
+        for i in 0..FONTSET.len() {
+            ram[i] = FONTSET[i];
+        }
+
         Processor {
             reg: [0; 16],
             stack: [0; 16],
-            ram: [0; CHIP8_RAM],
-            vram: [0; CHIP8_SCREEN_SIZE],
+            ram,
+            vram: [[0; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT],
             pc: 0x200,
             sp: 0,
             i: 0,
@@ -69,7 +93,6 @@ impl Processor {
 
     fn execute_opcode(&mut self, opcode: u16) {
         let pc_update = match opcode & 0xF000 {
-            // TODO: change names to what the actual function does
             0x0000 => self._op_0(opcode),
             0x1000 => self._op_1(opcode),
             0x2000 => self._op_2(opcode),
@@ -130,8 +153,8 @@ impl Processor {
         /*
         0x2NNN(CALL addr) = Call subroutine at NNN.
         */
-        // TODO: should i add OPCODE_SIZE to self.pc before putting it into the stack
-        self.stack[self.sp] = self.pc;
+        // https://old.reddit.com/r/EmuDev/comments/5so1bo/chip8_emu_questions/ddibkkp/
+        self.stack[self.sp] = self.pc + OPCODE_SIZE;
         self.sp += 1;
         ProgramCounter::Jump(Processor::get_nnn(opcode) as usize)
     }
@@ -167,8 +190,9 @@ impl Processor {
     }
 
     fn _op_7(&mut self, opcode: u16) -> ProgramCounter {
-        // TODO: account for overflows
-        self.reg[Processor::get_x(opcode) as usize] += Processor::get_0nn(opcode);
+        // TODO: sanity check
+        let x = Processor::get_x(opcode) as usize;
+        self.reg[x] = self.reg[x].wrapping_add(Processor::get_0nn(opcode));
         ProgramCounter::Next
     }
 
@@ -257,7 +281,25 @@ impl Processor {
     }
 
     fn _op_d(&mut self, opcode: u16) -> ProgramCounter {
-        // TODO: later
+        let x = Processor::get_x(opcode) as usize;
+        let y = Processor::get_y(opcode) as usize;
+        let vx = Processor::get_x(opcode) as usize;
+        let vy = Processor::get_y(opcode) as usize;
+        let n = Processor::get_00n(opcode) as usize;
+        self.reg[0x0F] = 0;
+
+        for byte in 0..n {
+            let data = self.ram[self.i + byte];
+            let sy = (vy + byte) % CHIP8_SCREEN_HEIGHT;
+            for bit in 0..8 {
+                // let bit_to_draw = (data >> (7 - bit)) & 1;
+                let bit_to_draw = data & (1 << (7 - bit));
+                let sx = (vx + bit) % CHIP8_SCREEN_WIDTH;
+                self.reg[0x0F] |= bit_to_draw & self.vram[sy][sx];
+                self.vram[sy][sx] ^= bit_to_draw;
+            }
+        }
+        ProgramCounter::Next
     }
 
     fn _op_e(&mut self, opcode: u16) -> ProgramCounter {
@@ -289,8 +331,11 @@ impl Processor {
                 ProgramCounter::Next
             }
             0x29 => {
-                // TODO: why * 5?????????
-                self.i = self.ram[x] as usize;
+                // The program doesn't know where we stored the fontset, it can be anywhere.
+                // It just requests the char(0-F) that it wants and we give it that.
+                // So as each char takes up 5 bytes,
+                // we calculate the offset by multiplying V[x] by 5 to get the font addr.
+                self.i = (self.ram[x] as usize) * 5;
                 ProgramCounter::Next
             }
             0x33 => {
