@@ -1,5 +1,3 @@
-use std::usize;
-
 use rand::Rng;
 
 const CHIP8_RAM: usize = 4096;
@@ -93,30 +91,36 @@ impl Processor {
 
     fn execute_opcode(&mut self, opcode: u16) {
         let pc_update = match opcode & 0xF000 {
-            0x0000 => self._op_0(opcode),
-            0x1000 => self._op_1(opcode),
-            0x2000 => self._op_2(opcode),
-            0x3000 => self._op_3(opcode),
-            0x4000 => self._op_4(opcode),
-            0x5000 => self._op_5(opcode),
-            0x6000 => self._op_6(opcode),
-            0x7000 => self._op_7(opcode),
-            0x8000 => self._op_8(opcode),
-            0x9000 => self._op_9(opcode),
-            0xA000 => self._op_a(opcode),
-            0xB000 => self._op_b(opcode),
-            0xC000 => self._op_c(opcode),
-            0xD000 => self._op_d(opcode),
-            0xE000 => self._op_e(opcode),
-            0xF000 => self._op_f(opcode),
+            0x0000 => self.op_0(opcode),
+            0x1000 => self.op_1(opcode),
+            0x2000 => self.op_2(opcode),
+            0x3000 => self.op_3(opcode),
+            0x4000 => self.op_4(opcode),
+            0x5000 => self.op_5(opcode),
+            0x6000 => self.op_6(opcode),
+            0x7000 => self.op_7(opcode),
+            0x8000 => self.op_8(opcode),
+            0x9000 => self.op_9(opcode),
+            0xA000 => self.op_a(opcode),
+            0xB000 => self.op_b(opcode),
+            0xC000 => self.op_c(opcode),
+            0xD000 => self.op_d(opcode),
+            0xE000 => self.op_e(opcode),
+            0xF000 => self.op_f(opcode),
             _ => {
                 println!("Invalid OPCODE {}", opcode);
                 ProgramCounter::Next
             }
         };
+
+        match pc_update {
+            ProgramCounter::Next => self.pc += OPCODE_SIZE,
+            ProgramCounter::Skip => self.pc += 2 * OPCODE_SIZE,
+            ProgramCounter::Jump(addr) => self.pc = addr,
+        };
     }
 
-    fn _op_0(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_0(&mut self, opcode: u16) -> ProgramCounter {
         /*
         0x0NNN = Deprecated?
         0x00E0(CLS) = Clear the screen.
@@ -124,7 +128,7 @@ impl Processor {
         */
         match opcode & 0x00FF {
             0x00E0 => {
-                self.vram = [0; CHIP8_SCREEN_SIZE];
+                self.vram = [[0; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT];
                 ProgramCounter::Next
             }
             0x00EE => {
@@ -142,14 +146,14 @@ impl Processor {
         }
     }
 
-    fn _op_1(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_1(&mut self, opcode: u16) -> ProgramCounter {
         /*
         0x1NNN(JP addr) = Jump to location NNN.
         */
         ProgramCounter::Jump(Processor::get_nnn(opcode) as usize)
     }
 
-    fn _op_2(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_2(&mut self, opcode: u16) -> ProgramCounter {
         /*
         0x2NNN(CALL addr) = Call subroutine at NNN.
         */
@@ -159,7 +163,7 @@ impl Processor {
         ProgramCounter::Jump(Processor::get_nnn(opcode) as usize)
     }
 
-    fn _op_3(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_3(&mut self, opcode: u16) -> ProgramCounter {
         /*
         0x3XKK = Skip next instruction if Vx == kk.
         */
@@ -168,7 +172,7 @@ impl Processor {
         )
     }
 
-    fn _op_4(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_4(&mut self, opcode: u16) -> ProgramCounter {
         /*
         0x4XKK = Skip next instruction if Vx != kk.
         */
@@ -177,26 +181,26 @@ impl Processor {
         )
     }
 
-    fn _op_5(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_5(&mut self, opcode: u16) -> ProgramCounter {
         ProgramCounter::skip_if(
             self.reg[Processor::get_x(opcode) as usize]
                 == self.reg[Processor::get_y(opcode) as usize],
         )
     }
 
-    fn _op_6(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_6(&mut self, opcode: u16) -> ProgramCounter {
         self.reg[Processor::get_x(opcode) as usize] = Processor::get_0nn(opcode);
         ProgramCounter::Next
     }
 
-    fn _op_7(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_7(&mut self, opcode: u16) -> ProgramCounter {
         // TODO: sanity check
         let x = Processor::get_x(opcode) as usize;
         self.reg[x] = self.reg[x].wrapping_add(Processor::get_0nn(opcode));
         ProgramCounter::Next
     }
 
-    fn _op_8(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_8(&mut self, opcode: u16) -> ProgramCounter {
         let x = Processor::get_x(opcode) as usize;
         let y = Processor::get_y(opcode) as usize;
 
@@ -258,29 +262,29 @@ impl Processor {
         }
     }
 
-    fn _op_9(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_9(&mut self, opcode: u16) -> ProgramCounter {
         ProgramCounter::skip_if(
             self.reg[Processor::get_x(opcode) as usize]
                 != self.reg[Processor::get_y(opcode) as usize],
         )
     }
 
-    fn _op_a(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_a(&mut self, opcode: u16) -> ProgramCounter {
         self.i = Processor::get_nnn(opcode) as usize;
         ProgramCounter::Next
     }
 
-    fn _op_b(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_b(&mut self, opcode: u16) -> ProgramCounter {
         ProgramCounter::Jump((Processor::get_nnn(opcode) + self.reg[0] as u16) as usize)
     }
 
-    fn _op_c(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_c(&mut self, opcode: u16) -> ProgramCounter {
         let mut rng = rand::thread_rng();
         self.reg[Processor::get_x(opcode) as usize] = Processor::get_0nn(opcode) & rng.gen::<u8>();
         ProgramCounter::Next
     }
 
-    fn _op_d(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_d(&mut self, opcode: u16) -> ProgramCounter {
         let x = Processor::get_x(opcode) as usize;
         let y = Processor::get_y(opcode) as usize;
         let vx = Processor::get_x(opcode) as usize;
@@ -302,11 +306,11 @@ impl Processor {
         ProgramCounter::Next
     }
 
-    fn _op_e(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_e(&mut self, opcode: u16) -> ProgramCounter {
         // TODO: later
     }
 
-    fn _op_f(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_f(&mut self, opcode: u16) -> ProgramCounter {
         let x = Processor::get_x(opcode) as usize;
         let y = Processor::get_y(opcode) as usize;
         match Processor::get_nnn(opcode) {
