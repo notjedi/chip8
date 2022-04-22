@@ -1,11 +1,11 @@
 use sdl2;
-use sdl2::rect::Rect;
 use sdl2::pixels::Color;
+use sdl2::rect::Rect;
 use sdl2::{render::Canvas, video::Window};
 
-use crate::SCALE_FACTOR;
 use crate::CHIP8_SCREEN_HEIGHT;
 use crate::CHIP8_SCREEN_WIDTH;
+use crate::SCALE_FACTOR;
 
 pub struct Display {
     canvas: Canvas<Window>,
@@ -23,15 +23,13 @@ impl Display {
             .position_centered()
             .build()
             .unwrap();
-            // TOOD: try .opengl()
+        // TOOD: try .opengl()
 
         let mut canvas = window.into_canvas().build().unwrap();
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
 
-        Display {
-            canvas,
-        }
+        Display { canvas }
     }
 
     // TODO: try without &mut for self
@@ -42,7 +40,9 @@ impl Display {
                 self.canvas.set_draw_color(Display::get_color(vram[x][y]));
                 let x = (x * scale) as i32;
                 let y = (y * scale) as i32;
-                self.canvas.fill_rect(Rect::new(x, y, SCALE_FACTOR, SCALE_FACTOR)).unwrap();
+                self.canvas
+                    .fill_rect(Rect::new(x, y, SCALE_FACTOR, SCALE_FACTOR))
+                    .unwrap();
             }
         }
         self.canvas.present();

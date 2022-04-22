@@ -1,9 +1,9 @@
 use rand::Rng;
 
 use crate::CHIP8_RAM;
-use crate::OPCODE_SIZE;
-use crate::CHIP8_SCREEN_WIDTH;
 use crate::CHIP8_SCREEN_HEIGHT;
+use crate::CHIP8_SCREEN_WIDTH;
+use crate::OPCODE_SIZE;
 
 static FONTSET: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -84,7 +84,9 @@ impl Processor {
         }
     }
 
-    pub fn emulate_cycle(&mut self) -> (&[[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT], bool, bool) {
+    pub fn emulate_cycle(
+        &mut self,
+    ) -> (&[[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT], bool, bool) {
         self.display_flag = false;
         self.clear_flag = false;
         let opcode = self.fetch_opcode();
@@ -212,7 +214,6 @@ impl Processor {
         /*
         0x7xkk(LD Vx, byte) = Add value kk to register Vx.
         */
-        // TODO: sanity check
         let x = Processor::get_x(opcode) as usize;
         self.reg[x] = self.reg[x].wrapping_add(Processor::get_0nn(opcode));
         ProgramCounter::Next
@@ -273,7 +274,6 @@ impl Processor {
             }
             0x0E => {
                 // 0x8xyE(SHL Vx, Vy) = VF = Vx & 255. Set Vx = Vx SHL 1. (Shift Left)
-                // TODO: should i change this to 0b10000000?
                 self.reg[0x0F] = (self.reg[x] & 0xFF) >> 7;
                 self.reg[x] <<= 1;
                 ProgramCounter::Next

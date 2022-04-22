@@ -1,10 +1,10 @@
 use sdl2;
 
-use processor::Processor;
 use display::Display;
+use processor::Processor;
 
-mod processor;
 mod display;
+mod processor;
 
 // TODO: try using static
 const OPCODE_SIZE: usize = 2;
