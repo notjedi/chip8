@@ -1,9 +1,9 @@
 use rand::Rng;
 
-const CHIP8_RAM: usize = 4096;
-const OPCODE_SIZE: usize = 2;
-const CHIP8_SCREEN_WIDTH: usize = 64;
-const CHIP8_SCREEN_HEIGHT: usize = 32;
+use crate::CHIP8_RAM;
+use crate::OPCODE_SIZE;
+use crate::CHIP8_SCREEN_WIDTH;
+use crate::CHIP8_SCREEN_HEIGHT;
 
 static FONTSET: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -58,6 +58,8 @@ pub struct Processor {
     i: usize,
     delay_timer: u8,
     sound_timer: u8,
+    display_flag: bool,
+    clear_flag: bool,
 }
 
 impl Processor {
@@ -77,12 +79,18 @@ impl Processor {
             i: 0,
             delay_timer: 0,
             sound_timer: 0,
+            display_flag: false,
+            clear_flag: false,
         }
     }
 
-    pub fn emulate_cycle(&mut self) {
+    pub fn emulate_cycle(&mut self) -> (&[[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT], bool, bool) {
+        self.display_flag = false;
+        self.clear_flag = false;
         let opcode = self.fetch_opcode();
         self.execute_opcode(opcode);
+        // TODO: decrement delay timer and sound timer
+        (&self.vram, self.display_flag, self.clear_flag)
     }
 
     fn fetch_opcode(&self) -> u16 {
@@ -129,6 +137,7 @@ impl Processor {
         match opcode & 0x00FF {
             0x00E0 => {
                 self.vram = [[0; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT];
+                self.clear_flag = true;
                 ProgramCounter::Next
             }
             0x00EE => {
@@ -237,7 +246,7 @@ impl Processor {
             0x04 => {
                 // 0x8xy4(ADD Vx, Vy) = Set Vx = Vx + Vy, set VF = carry.
                 let (vx, vy) = (self.reg[x], self.reg[y]);
-                let result = vx + vy;
+                let result = vx as usize + vy as usize;
                 self.reg[x] = result as u8;
                 self.reg[0x0F] = if result > 0xFF { 1 } else { 0 };
                 ProgramCounter::Next
@@ -263,9 +272,9 @@ impl Processor {
                 ProgramCounter::Next
             }
             0x0E => {
-                // 0x8xyE(SHL Vx, Vy) = VF = Vx & 256. Set Vx = Vx SHL 1. (Shift Left)
+                // 0x8xyE(SHL Vx, Vy) = VF = Vx & 255. Set Vx = Vx SHL 1. (Shift Left)
                 // TODO: should i change this to 0b10000000?
-                self.reg[0x0F] = (self.reg[x] & 256) >> 7;
+                self.reg[0x0F] = (self.reg[x] & 0xFF) >> 7;
                 self.reg[x] <<= 1;
                 ProgramCounter::Next
             }
@@ -319,11 +328,10 @@ impl Processor {
         0xDxyn(DRW, Vx, Vy, nibble) = Display n-byte sprite starting at
         memory location I at (Vx, Vy), set VF = collision.
         */
-        let x = Processor::get_x(opcode) as usize;
-        let y = Processor::get_y(opcode) as usize;
         let vx = Processor::get_x(opcode) as usize % CHIP8_SCREEN_WIDTH;
         let vy = Processor::get_y(opcode) as usize % CHIP8_SCREEN_HEIGHT;
         let n = Processor::get_00n(opcode) as usize;
+        self.display_flag = true;
         self.reg[0x0F] = 0;
 
         // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#dxyn-display
@@ -357,11 +365,11 @@ impl Processor {
         0xEXA1(SKNP Vx) = Skip next instruction if key with the value of Vx is not pressed.
         */
         // TODO: later
+        ProgramCounter::Next
     }
 
     fn op_f(&mut self, opcode: u16) -> ProgramCounter {
         let x = Processor::get_x(opcode) as usize;
-        let y = Processor::get_y(opcode) as usize;
         match Processor::get_nnn(opcode) {
             0x07 => {
                 // Fx07(LD Vx, DT) = Set Vx = delay timer value.
