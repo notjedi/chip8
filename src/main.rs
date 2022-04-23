@@ -1,9 +1,11 @@
 use sdl2;
 
 use display::Display;
+use keypad::Keypad;
 use processor::Processor;
 
 mod display;
+mod keypad;
 mod processor;
 
 // TODO: try using static
@@ -16,10 +18,11 @@ const CHIP8_SCREEN_HEIGHT: usize = 32;
 fn main() {
     let sdl_context = sdl2::init().unwrap();
     let mut display = Display::new(&sdl_context);
+    let mut keypad = Keypad::new(&sdl_context);
     let mut processor = Processor::new();
 
     loop {
-        let (vram, display_flag, clear_flag) = processor.emulate_cycle();
+        let (vram, display_flag, clear_flag) = processor.emulate_cycle(&mut keypad);
 
         if display_flag {
             display.render(vram);

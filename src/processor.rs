@@ -1,4 +1,7 @@
+use crate::Keypad;
 use rand::Rng;
+use sdl2::event::Event;
+use sdl2::keyboard::Scancode;
 
 use crate::CHIP8_RAM;
 use crate::CHIP8_SCREEN_HEIGHT;
@@ -86,11 +89,12 @@ impl Processor {
 
     pub fn emulate_cycle(
         &mut self,
+        keypad: &mut Keypad,
     ) -> (&[[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT], bool, bool) {
         self.display_flag = false;
         self.clear_flag = false;
         let opcode = self.fetch_opcode();
-        self.execute_opcode(opcode);
+        self.execute_opcode(opcode, keypad);
         // TODO: decrement delay timer and sound timer
         (&self.vram, self.display_flag, self.clear_flag)
     }
@@ -99,7 +103,7 @@ impl Processor {
         (self.ram[self.pc] as u16) << 8 | self.ram[self.pc + 1] as u16
     }
 
-    fn execute_opcode(&mut self, opcode: u16) {
+    fn execute_opcode(&mut self, opcode: u16, keypad: &mut Keypad) {
         let pc_update = match opcode & 0xF000 {
             0x0000 => self.op_0(opcode),
             0x1000 => self.op_1(opcode),
@@ -115,8 +119,8 @@ impl Processor {
             0xB000 => self.op_b(opcode),
             0xC000 => self.op_c(opcode),
             0xD000 => self.op_d(opcode),
-            0xE000 => self.op_e(opcode),
-            0xF000 => self.op_f(opcode),
+            0xE000 => self.op_e(opcode, keypad),
+            0xF000 => self.op_f(opcode, keypad),
             _ => {
                 println!("Invalid OPCODE {}", opcode);
                 ProgramCounter::Next
@@ -359,16 +363,33 @@ impl Processor {
         ProgramCounter::Next
     }
 
-    fn op_e(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_e(&mut self, opcode: u16, keypad: &Keypad) -> ProgramCounter {
         /*
         0xEX9E(SKP Vx) = Skip next instruction if key with the value of Vx is pressed.
         0xEXA1(SKNP Vx) = Skip next instruction if key with the value of Vx is not pressed.
         */
-        // TODO: later
-        ProgramCounter::Next
+        let x = Processor::get_x(opcode) as usize;
+        match Processor::get_0nn(opcode) {
+            0x9E => {
+                let keycode = Keypad::unmap_key(self.reg[x]);
+                ProgramCounter::skip_if(keypad.is_pressed(keycode.unwrap()))
+            }
+            0xA1 => {
+                let keycode = Keypad::unmap_key(self.reg[x]);
+                ProgramCounter::skip_if(!keypad.is_pressed(keycode.unwrap()))
+            }
+            _ => {
+                println!(
+                    "Invalid operation in OPCODE {} with args {}",
+                    opcode & 0xF000,
+                    Processor::get_nnn(opcode)
+                );
+                ProgramCounter::Next
+            }
+        }
     }
 
-    fn op_f(&mut self, opcode: u16) -> ProgramCounter {
+    fn op_f(&mut self, opcode: u16, keypad: &mut Keypad) -> ProgramCounter {
         let x = Processor::get_x(opcode) as usize;
         match Processor::get_nnn(opcode) {
             0x07 => {
@@ -378,7 +399,26 @@ impl Processor {
             }
             0x0A => {
                 // 0xFx0A(LD Vx, K) = Wait for a key press, store the value of the key in Vx.
-                // TODO: later
+
+                let key_idx = loop {
+                    let event: Event = keypad.wait_key_press();
+                    let keycode = match event {
+                        Event::KeyDown {
+                            keycode: Some(code),
+                            ..
+                        } => Some(code),
+                        _ => None,
+                    };
+                    if keycode.is_some() {
+                        let scancode = Scancode::from_keycode(keycode.unwrap()).unwrap();
+                        let key = Keypad::map_key(scancode);
+                        if key.is_some() {
+                            break key.unwrap();
+                        }
+                    }
+                };
+
+                self.ram[x] = key_idx;
                 ProgramCounter::Next
             }
             0x15 => {

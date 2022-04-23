@@ -1,52 +1,69 @@
 use sdl2;
-use sdl2::keyboard::KeyCode;
+use sdl2::event::Event;
+use sdl2::keyboard::Scancode;
 
-struct Keypad {
+pub struct Keypad {
     event_pump: sdl2::EventPump,
-    keys: [bool; 16],
 }
 
 impl Keypad {
-    fn new(sdl_context: &sdl2::Sdl) -> Self {
+    pub fn new(sdl_context: &sdl2::Sdl) -> Self {
         Keypad {
-            event_pump = sdl_context.event_pump().unwrap(),
-            keys = [false; 16],
+            event_pump: sdl_context.event_pump().unwrap(),
         }
     }
 
-    fn is_pressed(&self, key_idx: usize) -> bool {
-        self.keys[key_idx]
+    pub fn is_pressed(&self, keycode: Scancode) -> bool {
+        self.event_pump
+            .keyboard_state()
+            .is_scancode_pressed(keycode)
     }
 
-    fn wait_key_press(&self) -> KeyCode {
+    pub fn wait_key_press(&mut self) -> Event {
+        self.event_pump.wait_event()
     }
 
-    fn map_key(key: Keycode) -> Option<i32> {
+    pub fn map_key(key: Scancode) -> Option<u8> {
         match key {
-            Keycode::Num1 => Some(0x1),
-            Keycode::Num2 => Some(0x2),
-            Keycode::Num3 => Some(0x3),
-            Keycode::Num4 => Some(0xC),
-            Keycode::Q => Some(0x4),
-            Keycode::W => Some(0x5),
-            Keycode::E => Some(0x6),
-            Keycode::R => Some(0xD),
-            Keycode::A => Some(0x7),
-            Keycode::S => Some(0x8),
-            Keycode::D => Some(0x9),
-            Keycode::F => Some(0xE),
-            Keycode::Z => Some(0xA),
-            Keycode::X => Some(0x0),
-            Keycode::C => Some(0xB),
-            Keycode::V => Some(0xF),
+            Scancode::Num1 => Some(0x1),
+            Scancode::Num2 => Some(0x2),
+            Scancode::Num3 => Some(0x3),
+            Scancode::Num4 => Some(0xC),
+            Scancode::Q => Some(0x4),
+            Scancode::W => Some(0x5),
+            Scancode::E => Some(0x6),
+            Scancode::R => Some(0xD),
+            Scancode::A => Some(0x7),
+            Scancode::S => Some(0x8),
+            Scancode::D => Some(0x9),
+            Scancode::F => Some(0xE),
+            Scancode::Z => Some(0xA),
+            Scancode::X => Some(0x0),
+            Scancode::C => Some(0xB),
+            Scancode::V => Some(0xF),
             _ => None,
         }
     }
 
-    fn set_key_state(&mut self, key: KeyCode, state: bool) {
-        if let Some(idx) = Keypad::map_key(key) {
-            self.keys[idx] = state;
+    pub fn unmap_key(key: u8) -> Option<Scancode> {
+        match key {
+            0x01 => Some(Scancode::Num1),
+            0x02 => Some(Scancode::Num2),
+            0x03 => Some(Scancode::Num3),
+            0x0C => Some(Scancode::Num4),
+            0x04 => Some(Scancode::Q),
+            0x05 => Some(Scancode::W),
+            0x06 => Some(Scancode::E),
+            0x0D => Some(Scancode::R),
+            0x07 => Some(Scancode::A),
+            0x08 => Some(Scancode::S),
+            0x09 => Some(Scancode::D),
+            0x0E => Some(Scancode::F),
+            0x0A => Some(Scancode::Z),
+            0x00 => Some(Scancode::X),
+            0x0B => Some(Scancode::C),
+            0x0F => Some(Scancode::V),
+            _ => None,
         }
     }
-
 }
