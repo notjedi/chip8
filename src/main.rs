@@ -1,5 +1,3 @@
-use sdl2;
-
 use display::Display;
 use keypad::Keypad;
 use processor::Processor;

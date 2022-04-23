@@ -68,9 +68,7 @@ pub struct Processor {
 impl Processor {
     pub fn new() -> Self {
         let mut ram = [0u8; CHIP8_RAM];
-        for i in 0..FONTSET.len() {
-            ram[i] = FONTSET[i];
-        }
+        ram[..FONTSET.len()].clone_from_slice(&FONTSET[..]);
 
         Processor {
             reg: [0; 16],
@@ -278,7 +276,7 @@ impl Processor {
             }
             0x0E => {
                 // 0x8xyE(SHL Vx, Vy) = VF = Vx & 255. Set Vx = Vx SHL 1. (Shift Left)
-                self.reg[0x0F] = (self.reg[x] & 0xFF) >> 7;
+                self.reg[0x0F] = self.reg[x] >> 7;
                 self.reg[x] <<= 1;
                 ProgramCounter::Next
             }
@@ -364,17 +362,16 @@ impl Processor {
     }
 
     fn op_e(&mut self, opcode: u16, keypad: &Keypad) -> ProgramCounter {
-        /*
-        0xEX9E(SKP Vx) = Skip next instruction if key with the value of Vx is pressed.
-        0xEXA1(SKNP Vx) = Skip next instruction if key with the value of Vx is not pressed.
-        */
         let x = Processor::get_x(opcode) as usize;
         match Processor::get_0nn(opcode) {
             0x9E => {
+                // 0xEX9E(SKP Vx) = Skip next instruction if key with the value of Vx is pressed.
                 let keycode = Keypad::unmap_key(self.reg[x]);
                 ProgramCounter::skip_if(keypad.is_pressed(keycode.unwrap()))
             }
             0xA1 => {
+                // 0xEXA1(SKNP Vx) = Skip next instruction if key with the value of Vx is not
+                // pressed.
                 let keycode = Keypad::unmap_key(self.reg[x]);
                 ProgramCounter::skip_if(!keypad.is_pressed(keycode.unwrap()))
             }
@@ -409,11 +406,11 @@ impl Processor {
                         } => Some(code),
                         _ => None,
                     };
-                    if keycode.is_some() {
-                        let scancode = Scancode::from_keycode(keycode.unwrap()).unwrap();
+                    if let Some(keycode) = keycode {
+                        let scancode = Scancode::from_keycode(keycode).unwrap();
                         let key = Keypad::map_key(scancode);
-                        if key.is_some() {
-                            break key.unwrap();
+                        if let Some(key) = key {
+                            break key;
                         }
                     }
                 };

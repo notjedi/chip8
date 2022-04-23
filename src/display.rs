@@ -1,4 +1,3 @@
-use sdl2;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::{render::Canvas, video::Window};
@@ -35,9 +34,10 @@ impl Display {
     // TODO: try without &mut for self
     pub fn render(&mut self, vram: &[[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT]) {
         let scale = SCALE_FACTOR as usize;
-        for x in 0..CHIP8_SCREEN_WIDTH {
-            for y in 0..CHIP8_SCREEN_HEIGHT {
-                self.canvas.set_draw_color(Display::get_color(vram[x][y]));
+        // TODO: try with &row
+        for (x, row) in vram.iter().enumerate() {
+            for (y, &col) in row.iter().enumerate() {
+                self.canvas.set_draw_color(Display::get_color(col));
                 let x = (x * scale) as i32;
                 let y = (y * scale) as i32;
                 self.canvas
