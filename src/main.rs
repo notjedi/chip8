@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use display::Display;
 use keypad::Keypad;
 use processor::Processor;
@@ -18,6 +20,10 @@ fn main() {
     let mut display = Display::new(&sdl_context);
     let mut keypad = Keypad::new(&sdl_context);
     let mut processor = Processor::new();
+
+    let mut rom =
+        File::open("/home/jedi/.local/src/chip8/rust-chip8/data/PONG").expect("File not found!");
+    processor.load(&mut rom);
 
     loop {
         let (vram, display_flag, clear_flag) = processor.emulate_cycle(&mut keypad);

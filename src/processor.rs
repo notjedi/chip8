@@ -2,6 +2,8 @@ use crate::Keypad;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
+use std::fs::File;
+use std::io::Read;
 
 use crate::CHIP8_RAM;
 use crate::CHIP8_SCREEN_HEIGHT;
@@ -85,6 +87,16 @@ impl Processor {
         }
     }
 
+    pub fn load(&mut self, rom: &mut File) {
+        let mut buf = [0u8; 3584]; // 0x1000 - 0x200 = 3584
+        if rom.read(&mut buf).is_ok() {
+            for (i, &byte) in buf.iter().enumerate() {
+                self.ram[0x200 + i] = byte;
+            }
+        }
+        // rom.read_exact(&mut self.ram[0x200..]).expect("Unable to read file!");
+    }
+
     pub fn emulate_cycle(
         &mut self,
         keypad: &mut Keypad,
@@ -133,27 +145,20 @@ impl Processor {
     }
 
     fn op_0(&mut self, opcode: u16) -> ProgramCounter {
-        /*
-        0x0nnn = Deprecated?
-        0x00E0(CLS) = Clear the screen.
-        0x00EE(RET) = Return from subroutine.
-        */
-        match opcode & 0x00FF {
+        match Processor::get_0nn(opcode) {
             0x00E0 => {
+                // 0x00E0(CLS) = Clear the screen.
                 self.vram = [[0; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT];
                 self.clear_flag = true;
                 ProgramCounter::Next
             }
             0x00EE => {
+                // 0x00EE(RET) = Return from subroutine.
                 self.sp -= 1;
                 ProgramCounter::Jump(self.stack[self.sp] as usize)
             }
             _ => {
-                println!(
-                    "Invalid operation in OPCODE {} with args {}",
-                    opcode & 0xF000,
-                    Processor::get_nnn(opcode)
-                );
+                Processor::print_err(opcode);
                 ProgramCounter::Next
             }
         }
@@ -180,18 +185,14 @@ impl Processor {
         /*
         0x3xkk(SE Vx, byte) = Skip next instruction if Vx == kk.
         */
-        ProgramCounter::skip_if(
-            self.reg[Processor::get_x(opcode) as usize] == Processor::get_0nn(opcode),
-        )
+        ProgramCounter::skip_if(self.reg[Processor::get_x(opcode)] == Processor::get_0nn(opcode))
     }
 
     fn op_4(&mut self, opcode: u16) -> ProgramCounter {
         /*
         0x4xkk(SNE Vx, byte) = Skip next instruction if Vx != kk.
         */
-        ProgramCounter::skip_if(
-            self.reg[Processor::get_x(opcode) as usize] != Processor::get_0nn(opcode),
-        )
+        ProgramCounter::skip_if(self.reg[Processor::get_x(opcode)] != Processor::get_0nn(opcode))
     }
 
     fn op_5(&mut self, opcode: u16) -> ProgramCounter {
@@ -199,8 +200,7 @@ impl Processor {
         0x5xy0(SE Vx, Vy) = Skip next instruction if Vx != Vy.
         */
         ProgramCounter::skip_if(
-            self.reg[Processor::get_x(opcode) as usize]
-                == self.reg[Processor::get_y(opcode) as usize],
+            self.reg[Processor::get_x(opcode)] == self.reg[Processor::get_y(opcode)],
         )
     }
 
@@ -208,7 +208,7 @@ impl Processor {
         /*
         0x6xkk(LD Vx, byte) = Load value kk into register Vx.
         */
-        self.reg[Processor::get_x(opcode) as usize] = Processor::get_0nn(opcode);
+        self.reg[Processor::get_x(opcode)] = Processor::get_0nn(opcode);
         ProgramCounter::Next
     }
 
@@ -216,14 +216,14 @@ impl Processor {
         /*
         0x7xkk(LD Vx, byte) = Add value kk to register Vx.
         */
-        let x = Processor::get_x(opcode) as usize;
+        let x = Processor::get_x(opcode);
         self.reg[x] = self.reg[x].wrapping_add(Processor::get_0nn(opcode));
         ProgramCounter::Next
     }
 
     fn op_8(&mut self, opcode: u16) -> ProgramCounter {
-        let x = Processor::get_x(opcode) as usize;
-        let y = Processor::get_y(opcode) as usize;
+        let x = Processor::get_x(opcode);
+        let y = Processor::get_y(opcode);
 
         match Processor::get_00n(opcode) {
             0x00 => {
@@ -281,11 +281,7 @@ impl Processor {
                 ProgramCounter::Next
             }
             _ => {
-                println!(
-                    "Invalid operation in OPCODE {} with args {}",
-                    opcode & 0xF000,
-                    Processor::get_nnn(opcode)
-                );
+                Processor::print_err(opcode);
                 ProgramCounter::Next
             }
         }
@@ -296,8 +292,7 @@ impl Processor {
         0x9xy0(SNE Vx, Vy) = Skip next instruction if Vx != Vy.
         */
         ProgramCounter::skip_if(
-            self.reg[Processor::get_x(opcode) as usize]
-                != self.reg[Processor::get_y(opcode) as usize],
+            self.reg[Processor::get_x(opcode)] != self.reg[Processor::get_y(opcode)],
         )
     }
 
@@ -321,7 +316,7 @@ impl Processor {
         0xCxkk(RND Vx, byte) = Vx = random bytes & kk.
         */
         let mut rng = rand::thread_rng();
-        self.reg[Processor::get_x(opcode) as usize] = Processor::get_0nn(opcode) & rng.gen::<u8>();
+        self.reg[Processor::get_x(opcode)] = Processor::get_0nn(opcode) & rng.gen::<u8>();
         ProgramCounter::Next
     }
 
@@ -330,8 +325,8 @@ impl Processor {
         0xDxyn(DRW, Vx, Vy, nibble) = Display n-byte sprite starting at
         memory location I at (Vx, Vy), set VF = collision.
         */
-        let vx = Processor::get_x(opcode) as usize % CHIP8_SCREEN_WIDTH;
-        let vy = Processor::get_y(opcode) as usize % CHIP8_SCREEN_HEIGHT;
+        let vx = Processor::get_x(opcode) % CHIP8_SCREEN_WIDTH;
+        let vy = Processor::get_y(opcode) % CHIP8_SCREEN_HEIGHT;
         let n = Processor::get_00n(opcode) as usize;
         self.display_flag = true;
         self.reg[0x0F] = 0;
@@ -362,7 +357,7 @@ impl Processor {
     }
 
     fn op_e(&mut self, opcode: u16, keypad: &Keypad) -> ProgramCounter {
-        let x = Processor::get_x(opcode) as usize;
+        let x = Processor::get_x(opcode);
         match Processor::get_0nn(opcode) {
             0x9E => {
                 // 0xEX9E(SKP Vx) = Skip next instruction if key with the value of Vx is pressed.
@@ -376,19 +371,15 @@ impl Processor {
                 ProgramCounter::skip_if(!keypad.is_pressed(keycode.unwrap()))
             }
             _ => {
-                println!(
-                    "Invalid operation in OPCODE {} with args {}",
-                    opcode & 0xF000,
-                    Processor::get_nnn(opcode)
-                );
+                Processor::print_err(opcode);
                 ProgramCounter::Next
             }
         }
     }
 
     fn op_f(&mut self, opcode: u16, keypad: &mut Keypad) -> ProgramCounter {
-        let x = Processor::get_x(opcode) as usize;
-        match Processor::get_nnn(opcode) {
+        let x = Processor::get_x(opcode);
+        match Processor::get_0nn(opcode) {
             0x07 => {
                 // Fx07(LD Vx, DT) = Set Vx = delay timer value.
                 self.reg[x] = self.delay_timer;
@@ -464,22 +455,18 @@ impl Processor {
                 ProgramCounter::Next
             }
             _ => {
-                println!(
-                    "Invalid operation in OPCODE {} with args {}",
-                    opcode & 0xF000,
-                    Processor::get_nnn(opcode)
-                );
+                Processor::print_err(opcode);
                 ProgramCounter::Next
             }
         }
     }
 
-    fn get_x(opcode: u16) -> u8 {
-        (opcode & 0x0F00) as u8
+    fn get_x(opcode: u16) -> usize {
+        ((opcode & 0x0F00) >> 8) as usize
     }
 
-    fn get_y(opcode: u16) -> u8 {
-        (opcode & 0x00F0) as u8
+    fn get_y(opcode: u16) -> usize {
+        ((opcode & 0x00F0) >> 4) as usize
     }
 
     fn get_00n(opcode: u16) -> u8 {
@@ -492,5 +479,13 @@ impl Processor {
 
     fn get_nnn(opcode: u16) -> u16 {
         opcode & 0x0FFF
+    }
+
+    fn print_err(opcode: u16) {
+        println!(
+            "Invalid operation in OPCODE {:04x} with args {:04x}",
+            opcode & 0xF000,
+            Processor::get_nnn(opcode)
+        );
     }
 }
