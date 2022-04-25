@@ -2,8 +2,6 @@ use crate::Keypad;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
-use std::fs::File;
-use std::io::Read;
 
 use crate::CHIP8_RAM;
 use crate::CHIP8_SCREEN_HEIGHT;
@@ -87,14 +85,11 @@ impl Processor {
         }
     }
 
-    pub fn load(&mut self, rom: &mut File) {
-        let mut buf = [0u8; 3584]; // 0x1000 - 0x200 = 3584
-        if rom.read(&mut buf).is_ok() {
-            for (i, &byte) in buf.iter().enumerate() {
-                self.ram[0x200 + i] = byte;
-            }
-        }
+    pub fn load(&mut self, rom: &[u8]) {
         // rom.read_exact(&mut self.ram[0x200..]).expect("Unable to read file!");
+        for (i, &byte) in rom.iter().enumerate() {
+            self.ram[0x200 + i] = byte;
+        }
     }
 
     pub fn emulate_cycle(
@@ -204,7 +199,7 @@ impl Processor {
 
     fn op_5(&mut self, opcode: u16) -> ProgramCounter {
         /*
-        0x5xy0(SE Vx, Vy) = Skip next instruction if Vx != Vy.
+        0x5xy0(SE Vx, Vy) = Skip next instruction if Vx == Vy.
         */
         ProgramCounter::skip_if(
             self.reg[Processor::get_x(opcode)] == self.reg[Processor::get_y(opcode)],
@@ -502,3 +497,7 @@ impl Processor {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "./processor_test.rs"]
+mod processor_test;

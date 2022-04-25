@@ -1,6 +1,7 @@
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::fs::File;
+use std::io::Read;
 
 use display::Display;
 use keypad::Keypad;
@@ -25,7 +26,13 @@ fn main() {
 
     let mut rom =
         File::open("/home/jedi/.local/src/chip8/rust-chip8/data/PONG").expect("File not found!");
-    processor.load(&mut rom);
+    let mut buf = [0u8; 3584]; // 0x1000 - 0x200 = 3584
+
+    if rom.read(&mut buf).is_ok() {
+        processor.load(&buf);
+    } else {
+        println!("Failed to read file");
+    }
 
     loop {
         let (vram, display_flag, clear_flag) = processor.emulate_cycle(&mut keypad);
