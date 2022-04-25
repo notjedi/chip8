@@ -104,8 +104,15 @@ impl Processor {
         self.display_flag = false;
         self.clear_flag = false;
         let opcode = self.fetch_opcode();
+
         self.execute_opcode(opcode, keypad);
-        // TODO: decrement delay timer and sound timer
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+        }
+
         (&self.vram, self.display_flag, self.clear_flag)
     }
 
@@ -155,7 +162,7 @@ impl Processor {
             0x00EE => {
                 // 0x00EE(RET) = Return from subroutine.
                 self.sp -= 1;
-                ProgramCounter::Jump(self.stack[self.sp] as usize)
+                ProgramCounter::Jump(self.stack[self.sp])
             }
             _ => {
                 Processor::print_err(opcode);
@@ -168,7 +175,7 @@ impl Processor {
         /*
         0x1nnn(JP addr) = Jump to location nnn.
         */
-        ProgramCounter::Jump(Processor::get_nnn(opcode) as usize)
+        ProgramCounter::Jump(Processor::get_nnn(opcode))
     }
 
     fn op_2(&mut self, opcode: u16) -> ProgramCounter {
@@ -178,7 +185,7 @@ impl Processor {
         // https://old.reddit.com/r/EmuDev/comments/5so1bo/chip8_emu_questions/ddibkkp/
         self.stack[self.sp] = self.pc + OPCODE_SIZE;
         self.sp += 1;
-        ProgramCounter::Jump(Processor::get_nnn(opcode) as usize)
+        ProgramCounter::Jump(Processor::get_nnn(opcode))
     }
 
     fn op_3(&mut self, opcode: u16) -> ProgramCounter {
@@ -300,7 +307,7 @@ impl Processor {
         /*
         0xAnnn(LD I, addr) = Load addr nnn into I.
         */
-        self.i = Processor::get_nnn(opcode) as usize;
+        self.i = Processor::get_nnn(opcode);
         ProgramCounter::Next
     }
 
@@ -308,7 +315,7 @@ impl Processor {
         /*
         0xBnnn(JP V0, addr) = Jump to location nnn + V0.
         */
-        ProgramCounter::Jump((Processor::get_nnn(opcode) + self.reg[0] as u16) as usize)
+        ProgramCounter::Jump(Processor::get_nnn(opcode) + self.reg[0] as usize)
     }
 
     fn op_c(&mut self, opcode: u16) -> ProgramCounter {
@@ -325,28 +332,23 @@ impl Processor {
         0xDxyn(DRW, Vx, Vy, nibble) = Display n-byte sprite starting at
         memory location I at (Vx, Vy), set VF = collision.
         */
-        let vx = Processor::get_x(opcode) % CHIP8_SCREEN_WIDTH;
-        let vy = Processor::get_y(opcode) % CHIP8_SCREEN_HEIGHT;
+        let vx = self.reg[Processor::get_x(opcode)] as usize % CHIP8_SCREEN_WIDTH;
+        let vy = self.reg[Processor::get_y(opcode)] as usize % CHIP8_SCREEN_HEIGHT;
         let n = Processor::get_00n(opcode) as usize;
         self.display_flag = true;
         self.reg[0x0F] = 0;
 
         // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#dxyn-display
-        // TODO: should i wrap around or not? few repos on github do wrap, some don't
-        // let sy = (vy + byte) % CHIP8_SCREEN_HEIGHT;
-        // let sx = (vx + bit) % CHIP8_SCREEN_WIDTH;
         for byte in 0..n {
             let data = self.ram[self.i + byte];
             let sy = vy + byte;
-
-            if sy == CHIP8_SCREEN_HEIGHT - 1 {
+            if sy == CHIP8_SCREEN_HEIGHT {
                 break;
             }
-
             for bit in 0..8 {
                 let bit_to_draw = data & (1 << (7 - bit));
                 let sx = vx + bit;
-                if sx == CHIP8_SCREEN_WIDTH - 1 {
+                if sx == CHIP8_SCREEN_WIDTH {
                     break;
                 }
                 self.reg[0x0F] |= bit_to_draw & self.vram[sy][sx];
@@ -387,7 +389,6 @@ impl Processor {
             }
             0x0A => {
                 // 0xFx0A(LD Vx, K) = Wait for a key press, store the value of the key in Vx.
-
                 let key_idx = loop {
                     let event: Event = keypad.wait_key_press();
                     let keycode = match event {
@@ -461,6 +462,18 @@ impl Processor {
         }
     }
 
+    pub fn pretty_print(&self) {
+        for (i, &val) in self.reg.iter().enumerate() {
+            print!("V{:01x}: {}", i, val);
+            if (i + 1) % 3 == 0 {
+                println!();
+            } else {
+                print!("\t");
+            }
+        }
+        println!("I: {}\n", self.i);
+    }
+
     fn get_x(opcode: u16) -> usize {
         ((opcode & 0x0F00) >> 8) as usize
     }
@@ -477,8 +490,8 @@ impl Processor {
         (opcode & 0x00FF) as u8
     }
 
-    fn get_nnn(opcode: u16) -> u16 {
-        opcode & 0x0FFF
+    fn get_nnn(opcode: u16) -> usize {
+        (opcode & 0x0FFF) as usize
     }
 
     fn print_err(opcode: u16) {

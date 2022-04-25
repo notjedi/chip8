@@ -1,3 +1,5 @@
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use std::fs::File;
 
 use display::Display;
@@ -27,11 +29,23 @@ fn main() {
 
     loop {
         let (vram, display_flag, clear_flag) = processor.emulate_cycle(&mut keypad);
-
         if display_flag {
             display.render(vram);
         } else if clear_flag {
             display.clear();
+        }
+        // processor.pretty_print();
+
+        let event = keypad.wait_key_press_until(1);
+        if let Some(event) = event {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break,
+                _ => {}
+            }
         }
     }
 }

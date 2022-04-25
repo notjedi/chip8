@@ -35,8 +35,8 @@ impl Display {
     pub fn render(&mut self, vram: &[[u8; CHIP8_SCREEN_WIDTH]; CHIP8_SCREEN_HEIGHT]) {
         let scale = SCALE_FACTOR as usize;
         // TODO: try with &row
-        for (x, row) in vram.iter().enumerate() {
-            for (y, &col) in row.iter().enumerate() {
+        for (y, row) in vram.iter().enumerate() {
+            for (x, &col) in row.iter().enumerate() {
                 self.canvas.set_draw_color(Display::get_color(col));
                 let x = (x * scale) as i32;
                 let y = (y * scale) as i32;

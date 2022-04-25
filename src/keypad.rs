@@ -22,6 +22,10 @@ impl Keypad {
         self.event_pump.wait_event()
     }
 
+    pub fn wait_key_press_until(&mut self, timeout: u32) -> Option<Event> {
+        self.event_pump.wait_event_timeout(timeout)
+    }
+
     pub fn map_key(key: Scancode) -> Option<u8> {
         match key {
             Scancode::Num1 => Some(0x1),
