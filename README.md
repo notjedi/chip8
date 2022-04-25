@@ -3,6 +3,7 @@ Chip8 Emulator in Rust.
 
 ## References
 
+<!-- https://stackoverflow.com/questions/56915258/difference-between-sdl-scancode-and-sdl-keycode/57124957#57124957 -->
 <!-- https://stackoverflow.com/questions/12770098/how-to-keep-the-cpu-usage-down-while-running-an-sdl-program -->
 <!-- https://stackoverflow.com/questions/320284/what-is-wrong-with-polling -->
 * [Laurence Scotford's posts](https://laurencescotford.com/chip-8-on-the-cosmac-vip-instruction-index)

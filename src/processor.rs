@@ -216,7 +216,7 @@ impl Processor {
 
     fn op_7(&mut self, opcode: u16) -> ProgramCounter {
         /*
-        0x7xkk(LD Vx, byte) = Add value kk to register Vx.
+        0x7xkk(ADD Vx, byte) = Add value kk to register Vx.
         */
         let x = Processor::get_x(opcode);
         self.reg[x] = self.reg[x].wrapping_add(Processor::get_0nn(opcode));
